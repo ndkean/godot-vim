@@ -2,7 +2,7 @@
 extends EditorPlugin
 
 const INF_COL : int = 99999
-const DEBUGGING : int = 1 # Change to 1 for debugging
+const DEBUGGING : int = 0 # Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
 
 const BREAKERS : Dictionary = { '!': 1, '"': 1, '#': 1, '$': 1, '%': 1, '&': 1, '(': 1, ')': 1, '*': 1, '+': 1, ',': 1, '-': 1, '.': 1, '/': 1, ':': 1, ';': 1, '<': 1, '=': 1, '>': 1, '?': 1, '@': 1, '[': 1, '\\': 1, ']': 1, '^': 1, '`': 1, '\'': 1, '{': 1, '|': 1, '}': 1, '~': 1 }
@@ -127,8 +127,9 @@ var the_key_map : Array[Dictionary] = [
 	{ "keys": ["Shift+Period"],                 "type": ACTION, "action": "indent", "action_args": { "forward" = true } },
 	{ "keys": ["Shift+J"],                      "type": ACTION, "action": "join_lines", "action_args": {} },
 	{ "keys": ["M", "{char}"],                  "type": ACTION, "action": "set_bookmark", "action_args": {} },
-	{ "keys": ["Shift+K"],                      "type": ACTION, "action": "go_to_doc" },
 	{ "keys": ["Apostrophe", "{char}"],         "type": MOTION, "motion": "go_to_bookmark", "motion_args": {} },
+	{ "keys": ["Shift+K"],                      "type": ACTION, "action": "go_to_doc", "context": Context.NORMAL},
+	
 ]
 
 
@@ -681,9 +682,15 @@ class Command:
 		var name = args.selected_character
 		if name in LOWER_ALPHA:
 			vim.current.bookmark_manager.set_bookmark(name, ed.curr_line())
+		
+	static func go_to_bookmark(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
+		var name = args.selected_character
+		var line := vim.current.bookmark_manager.get_bookmark(name)
+		if line < 0:
+			return null
+		return Position.new(line, 0)
 			
 	static func go_to_doc(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
-		if vim.current.normal_mode:
 			var text: String = ed.line_text(ed.curr_line())
 			var begin = text.rfind("res://", ed.curr_column())
 			var symbol = text[begin-1]
@@ -695,14 +702,6 @@ class Command:
 				search_word = ed.code_editor.get_word_under_caret()
 			ed.code_editor.symbol_lookup.emit(search_word, ed.curr_line(), ed.curr_column())
 			
-		
-	static func go_to_bookmark(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
-		var name = args.selected_character
-		var line := vim.current.bookmark_manager.get_bookmark(name)
-		if line < 0:
-			return null
-		return Position.new(line, 0)
-
 
 	###  HELPER FUNCTIONS
 
