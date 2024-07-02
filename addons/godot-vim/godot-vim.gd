@@ -1,7 +1,6 @@
 @tool
 extends EditorPlugin
 
-
 const INF_COL : int = 99999
 const DEBUGGING : int = 0 # Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
@@ -385,7 +384,7 @@ class Command:
         for from in [Position.new(symbol.line, 0), Position.new(0, 0)]:
             var parser = GDScriptParser.new(ed, from)
             if not parser.parse_until(symbol):
-               continue
+                continue
 
             if symbol.char in ")]}":
                 parser.stack.reverse()
@@ -1169,6 +1168,8 @@ class EditorAdaptor:
     var code_editor: CodeEdit
     var tab_width : int = 4
     var complex_ops : int = 0
+    const MARGIN_LINES_UP: int = 6
+    const MARGIN_LINES_DOWN: int = 4
 
     func set_code_editor(new_editor: CodeEdit) -> void:
         self.code_editor = new_editor
@@ -1190,14 +1191,19 @@ class EditorAdaptor:
 
     func jump_to(line: int, col: int) -> void:
         code_editor.unfold_line(line)
-
-        if line < first_visible_line():
-            code_editor.set_line_as_first_visible(max(0, line-8))
-        elif line > last_visible_line():
-            code_editor.set_line_as_last_visible(min(last_line(), line+8))
+        update_margin(line)
         code_editor.set_caret_line(line)
         code_editor.set_caret_column(col)
 
+    func update_margin(line: int) -> void:
+        var folded_lines_above = code_editor.get_next_visible_line_offset_from(line, -MARGIN_LINES_UP-1) - MARGIN_LINES_UP-1
+        var folded_lines_below = code_editor.get_next_visible_line_offset_from(line, +MARGIN_LINES_DOWN+1) - MARGIN_LINES_DOWN-1
+        if line < first_visible_line() + MARGIN_LINES_UP + folded_lines_above:
+            var lines_to_move = first_visible_line() - (first_visible_line() + MARGIN_LINES_UP) + line - folded_lines_above
+            code_editor.set_line_as_first_visible(max(0, lines_to_move))
+        elif line > last_visible_line() - MARGIN_LINES_DOWN - folded_lines_below:
+            var lines_to_move = last_visible_line() - (last_visible_line() - MARGIN_LINES_DOWN) + line + folded_lines_below
+            code_editor.set_line_as_last_visible(min(last_line(), lines_to_move))
 
     func first_line() -> int:
         return 0
