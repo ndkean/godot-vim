@@ -1310,8 +1310,14 @@ class EditorAdaptor:
 		return code_editor.get_selected_text()
 
 	func selection() -> TextRange:
-		var from := Position.new(code_editor.get_selection_from_line(), code_editor.get_selection_from_column())
-		var to := Position.new(code_editor.get_selection_to_line(), code_editor.get_selection_to_column())
+		var from : Position
+		var to : Position
+		if code_editor.has_selection():
+			from = Position.new(code_editor.get_selection_from_line(), code_editor.get_selection_from_column())
+			to = Position.new(code_editor.get_selection_to_line(), code_editor.get_selection_to_column())
+		else:
+			from = Position.new(code_editor.get_caret_line(), code_editor.get_caret_column())
+			to = Position.new(code_editor.get_caret_line(), code_editor.get_caret_column())
 		return TextRange.new(from, to)
 
 	func replace_selection(text: String) -> void:
