@@ -90,7 +90,7 @@ var the_key_map : Array[Dictionary] = [
 	{ "keys": ["Shift+D"],                      "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
 	{ "keys": ["Y"],                            "type": OPERATOR, "operator": "yank" },
 	{ "keys": ["Shift+Y"],                      "type": OPERATOR_MOTION, "operator": "yank", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
-	{ "keys": ["C"],                            "type": OPERATOR, "operator": "change" },
+	{ "keys": ["C"],                            "type": OPERATOR, "operator": "change", "operator_args": {"normal_mode_after_visual": false}},
 	{ "keys": ["Shift+C"],                      "type": OPERATOR_MOTION, "operator": "change", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
 	{ "keys": ["X"],                            "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_by_characters", "motion_args": { "forward": true, "one_line": true }, "context": Context.NORMAL },
 	{ "keys": ["S"],                            "type": OPERATOR_MOTION, "operator": "delete_and_enter_insert_mode", "motion": "move_by_characters", "motion_args": { "forward": true }, "context": Context.NORMAL },
@@ -141,8 +141,8 @@ var command_keys_white_list : Dictionary = {
 	"Ctrl+B": 1,
 	"Ctrl+U": 1,
 	"Ctrl+D": 1,
-	"Ctrl+O": 1,
-	"Ctrl+I": 1,
+	#"Ctrl+O": 1,   # Prefer to use as Alt+arrow aliases
+	#"Ctrl+I": 1,
 	"Ctrl+R": 1
 }
 
@@ -504,8 +504,8 @@ class Command:
 		var text := ed.selected_text()
 		vim.register.set_text(text, args.get("line_wise", false))
 
-		vim.current.enter_insert_mode();
 		ed.delete_selection()
+		vim.current.enter_insert_mode()
 
 	static func change_case(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
 		var lower_case : bool = args.get("lower", false)
@@ -1585,7 +1585,8 @@ class CommandDispatcher:
 			if vim.current.visual_mode:
 				operator_args.line_wise = vim.current.visual_line
 				process_operator(command.operator, operator_args, ed, vim)
-				vim.current.enter_normal_mode()
+				if operator_args.get("normal_mode_after_visual", true):
+					vim.current.enter_normal_mode()
 				return true
 			elif input_state.operator.is_empty(): # We are not fully done yet, need to wait for the motion
 				input_state.operator = command.operator
