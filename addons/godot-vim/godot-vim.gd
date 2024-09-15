@@ -1213,6 +1213,7 @@ class EditorAdaptor:
 	func set_curr_column(col: int) -> void:
 		code_editor.set_caret_column(col)
 
+
 	func jump_to(line: int, col: int) -> void:
 		code_editor.unfold_line(line)
 		update_margin(line)
@@ -1568,10 +1569,8 @@ class CommandDispatcher:
 				if new_pos is TextRange:
 					start = new_pos.from # In some cases (text object), we need to override the start position
 					new_pos = new_pos.to
-				ed.jump_to(new_pos.line, new_pos.column)
 				if start.compares_to(new_pos) > 0: # swap
-					start = new_pos
-					new_pos = vim_session.visual_start_pos
+					ed.jump_to(new_pos.line, new_pos.column)
 				if vim_session.visual_line:
 					ed.select(start.line, 0, new_pos.line + 1, 0)
 				else:
@@ -1633,6 +1632,9 @@ class CommandDispatcher:
 	func process_motion(motion: String, motion_args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Variant:
 		# Get current position
 		var cur := Position.new(ed.curr_line(), ed.curr_column())
+
+		if vim.current.visual_mode:
+			cur.column -= 1
 
 		# Prepare motion args
 		var user_repeat = vim.current.input_state.get_repeat()
