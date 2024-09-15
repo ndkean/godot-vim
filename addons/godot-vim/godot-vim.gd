@@ -35,7 +35,8 @@ var the_key_map : Array[Dictionary] = [
 	{ "keys": ["Shift+Equal"],                  "type": MOTION, "motion": "move_by_lines", "motion_args": { "forward": true, "to_first_char": true } },
 	{ "keys": ["Minus"],                        "type": MOTION, "motion": "move_by_lines", "motion_args": { "forward": false, "to_first_char": true } },
 	{ "keys": ["Shift+4"],                      "type": MOTION, "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
-	{ "keys": ["Shift+6"],                      "type": MOTION, "motion": "move_to_first_non_white_space_character" },
+	{ "keys": ["Shift+6"],                      "type": MOTION, "motion": "move_to_first_non_white_space_character", "motion_args": { "change_line": false } },
+	{ "keys": ["Shift+Minus"],                  "type": MOTION, "motion": "move_to_first_non_white_space_character", "motion_args": { "change_line": true } },
 	{ "keys": ["0"],                            "type": MOTION, "motion": "move_to_start_of_line" },
 	{ "keys": ["Shift+H"],                      "type": MOTION, "motion": "move_to_top_line", "motion_args": { "to_jump_list": true } },
 	{ "keys": ["Shift+L"],                      "type": MOTION, "motion": "move_to_bottom_line", "motion_args": { "to_jump_list": true } },
@@ -290,14 +291,18 @@ class Command:
 				vim.current.last_h_pos = col
 
 		var line = ed.next_unfolded_line(cur.line, args.repeat, args.forward)
+
 		if args.get("to_first_char", false):
 			col = ed.find_first_non_white_space_character(line)
 
 		return Position.new(line, col)
 
 	static func move_to_first_non_white_space_character(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
-		var i := ed.find_first_non_white_space_character(ed.curr_line())
-		return Position.new(cur.line, i)
+		var new_line = cur.line
+		if args.change_line:
+			new_line += args.repeat - 1
+		var i := ed.find_first_non_white_space_character(new_line)
+		return Position.new(new_line, i)
 
 	static func move_to_start_of_line(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
 		return Position.new(cur.line, 0)
