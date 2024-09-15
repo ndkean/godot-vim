@@ -205,6 +205,7 @@ func on_script_changed(s: Script) -> void:
 		var code_editor := scrpit_editor_base.get_base_editor() as CodeEdit
 		the_ed.set_code_editor(code_editor)
 		the_ed.set_block_caret(true)
+		the_ed.set_caret_blink(false)
 
 		if not code_editor.is_connected("caret_changed", on_caret_changed):
 			code_editor.caret_changed.connect(on_caret_changed)
@@ -1292,6 +1293,9 @@ class EditorAdaptor:
 		else:
 			code_editor.add_theme_constant_override("caret_width", 1)
 			code_editor.caret_type = TextEdit.CARET_TYPE_LINE
+	
+	func set_caret_blink(blink: bool) -> void:
+		code_editor.caret_blink = blink;
 
 	func deselect() -> void:
 		code_editor.deselect()
