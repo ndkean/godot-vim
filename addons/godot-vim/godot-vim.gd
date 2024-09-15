@@ -2,7 +2,7 @@
 extends EditorPlugin
 
 const INF_COL : int = 99999
-const DEBUGGING : int = 0 # Change to 1 for debugging
+const DEBUGGING : int = 1 # Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
 
 const BREAKERS : Dictionary = { '!': 1, '"': 1, '#': 1, '$': 1, '%': 1, '&': 1, '(': 1, ')': 1, '*': 1, '+': 1, ',': 1, '-': 1, '.': 1, '/': 1, ':': 1, ';': 1, '<': 1, '=': 1, '>': 1, '?': 1, '@': 1, '[': 1, '\\': 1, ']': 1, '^': 1, '`': 1, '\'': 1, '{': 1, '|': 1, '}': 1, '~': 1 }
@@ -149,8 +149,8 @@ var command_keys_white_list : Dictionary = {
 
 
 var editor_interface : EditorInterface
-var the_ed := EditorAdaptor.new() # The current editor adaptor
 var the_vim := Vim.new()
+var the_ed := EditorAdaptor.new(the_vim) # The current editor adaptor
 var the_dispatcher := CommandDispatcher.new(the_key_map) # The command dispatcher
 
 
@@ -266,6 +266,8 @@ class Command:
 			else:
 				line -= 1
 				col = ed.last_column(line)
+		# if vim.current.visual_mode:
+		# 	col -= 1
 		return Position.new(line, col)
 
 	static func move_by_scroll(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
@@ -1050,11 +1052,11 @@ class VimSession:
 		visual_line = line_wise
 
 
-		visual_start_pos = ed.curr_position()
+		visual_start_pos = ed.curr_position().right()
 		if line_wise:
-			ed.select(visual_start_pos.line, 0, visual_start_pos.line + 1, 0)
+			ed.select(visual_start_pos.line + 1, 0, visual_start_pos.line, 0)
 		else:
-			ed.select_by_pos2(visual_start_pos, visual_start_pos.right())
+			ed.select_by_pos2(visual_start_pos.left(), visual_start_pos)
 
 
 class Macro:
@@ -1198,8 +1200,12 @@ class EditorAdaptor:
 	var code_editor: CodeEdit
 	var tab_width : int = 4
 	var complex_ops : int = 0
+	var vim: Vim
 	const MARGIN_LINES_UP: int = 6
 	const MARGIN_LINES_DOWN: int = 4
+
+	func _init(v: Vim):
+		vim = v
 
 	func set_code_editor(new_editor: CodeEdit) -> void:
 		self.code_editor = new_editor
@@ -1214,11 +1220,13 @@ class EditorAdaptor:
 		return code_editor.get_caret_line()
 
 	func curr_column() -> int:
-		return code_editor.get_caret_column()
+		var col = code_editor.get_caret_column()
+		if vim.current.visual_mode:
+			col -= 1
+		return col
 
 	func set_curr_column(col: int) -> void:
 		code_editor.set_caret_column(col)
-
 
 	func jump_to(line: int, col: int) -> void:
 		code_editor.unfold_line(line)
@@ -1310,7 +1318,7 @@ class EditorAdaptor:
 		if to_line > last_line(): # If we try to select pass the last line, select till the last char
 			to_line = last_line()
 			to_col = INF_COL
-
+		
 		code_editor.select(from_line, from_col, to_line, to_col)
 
 	func delete_selection() -> void:
@@ -1574,15 +1582,22 @@ class CommandDispatcher:
 				return true
 
 			if vim_session.visual_mode:  # Visual mode
-				start = vim_session.visual_start_pos
+				start = vim_session.visual_start_pos.left()
 				if new_pos is TextRange:
 					start = new_pos.from # In some cases (text object), we need to override the start position
 					new_pos = new_pos.to
-				if start.compares_to(new_pos) > 0: # swap
-					ed.jump_to(new_pos.line, new_pos.column)
 				if vim_session.visual_line:
-					ed.select(start.line, 0, new_pos.line + 1, 0)
-				else:
+					var start_line = start.line
+					var new_line = new_pos.line
+					var new_col = 0
+
+					if new_line == ed.last_line():
+						new_col = ed.last_column(new_pos.line) + 1
+					elif start.line >= new_pos.line:
+						start_line += 1
+
+					ed.select(start_line, 0, new_line, new_col)
+				else: # visual mode
 					ed.select_by_pos2(start, new_pos.right())
 			elif input_state.operator.is_empty():  # Normal mode motion only
 				ed.jump_to(new_pos.line, new_pos.column)
@@ -1641,9 +1656,6 @@ class CommandDispatcher:
 	func process_motion(motion: String, motion_args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Variant:
 		# Get current position
 		var cur := Position.new(ed.curr_line(), ed.curr_column())
-
-		if vim.current.visual_mode:
-			cur.column -= 1
 
 		# Prepare motion args
 		var user_repeat = vim.current.input_state.get_repeat()
