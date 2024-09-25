@@ -35,7 +35,8 @@ var the_key_map : Array[Dictionary] = [
 	{ "keys": ["Shift+Equal"],                  "type": MOTION, "motion": "move_by_lines", "motion_args": { "forward": true, "to_first_char": true } },
 	{ "keys": ["Minus"],                        "type": MOTION, "motion": "move_by_lines", "motion_args": { "forward": false, "to_first_char": true } },
 	{ "keys": ["Shift+4"],                      "type": MOTION, "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
-	{ "keys": ["Shift+6"],                      "type": MOTION, "motion": "move_to_first_non_white_space_character" },
+	{ "keys": ["Shift+6"],                      "type": MOTION, "motion": "move_to_first_non_white_space_character", "motion_args": { "change_line": false } },
+	{ "keys": ["Shift+Minus"],                  "type": MOTION, "motion": "move_to_first_non_white_space_character", "motion_args": { "change_line": true } },
 	{ "keys": ["0"],                            "type": MOTION, "motion": "move_to_start_of_line" },
 	{ "keys": ["Shift+H"],                      "type": MOTION, "motion": "move_to_top_line", "motion_args": { "to_jump_list": true } },
 	{ "keys": ["Shift+L"],                      "type": MOTION, "motion": "move_to_bottom_line", "motion_args": { "to_jump_list": true } },
@@ -148,8 +149,8 @@ var command_keys_white_list : Dictionary = {
 
 
 var editor_interface : EditorInterface
-var the_ed := EditorAdaptor.new() # The current editor adaptor
 var the_vim := Vim.new()
+var the_ed := EditorAdaptor.new(the_vim) # The current editor adaptor
 var the_dispatcher := CommandDispatcher.new(the_key_map) # The command dispatcher
 
 
@@ -204,6 +205,7 @@ func on_script_changed(s: Script) -> void:
 		var code_editor := scrpit_editor_base.get_base_editor() as CodeEdit
 		the_ed.set_code_editor(code_editor)
 		the_ed.set_block_caret(true)
+		the_ed.set_caret_blink(false)
 
 		if not code_editor.is_connected("caret_changed", on_caret_changed):
 			code_editor.caret_changed.connect(on_caret_changed)
@@ -264,6 +266,8 @@ class Command:
 			else:
 				line -= 1
 				col = ed.last_column(line)
+		# if vim.current.visual_mode:
+		# 	col -= 1
 		return Position.new(line, col)
 
 	static func move_by_scroll(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
@@ -290,14 +294,18 @@ class Command:
 				vim.current.last_h_pos = col
 
 		var line = ed.next_unfolded_line(cur.line, args.repeat, args.forward)
+
 		if args.get("to_first_char", false):
 			col = ed.find_first_non_white_space_character(line)
 
 		return Position.new(line, col)
 
 	static func move_to_first_non_white_space_character(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
-		var i := ed.find_first_non_white_space_character(ed.curr_line())
-		return Position.new(cur.line, i)
+		var new_line = cur.line
+		if args.change_line:
+			new_line += args.repeat - 1
+		var i := ed.find_first_non_white_space_character(new_line)
+		return Position.new(new_line, i)
 
 	static func move_to_start_of_line(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
 		return Position.new(cur.line, 0)
@@ -1044,11 +1052,11 @@ class VimSession:
 		visual_line = line_wise
 
 
-		visual_start_pos = ed.curr_position()
+		visual_start_pos = ed.curr_position().right()
 		if line_wise:
-			ed.select(visual_start_pos.line, 0, visual_start_pos.line + 1, 0)
+			ed.select(visual_start_pos.line + 1, 0, visual_start_pos.line, 0)
 		else:
-			ed.select_by_pos2(visual_start_pos, visual_start_pos.right())
+			ed.select_by_pos2(visual_start_pos.left(), visual_start_pos)
 
 
 class Macro:
@@ -1192,8 +1200,12 @@ class EditorAdaptor:
 	var code_editor: CodeEdit
 	var tab_width : int = 4
 	var complex_ops : int = 0
+	var vim: Vim
 	const MARGIN_LINES_UP: int = 6
 	const MARGIN_LINES_DOWN: int = 4
+
+	func _init(v: Vim):
+		vim = v
 
 	func set_code_editor(new_editor: CodeEdit) -> void:
 		self.code_editor = new_editor
@@ -1208,7 +1220,10 @@ class EditorAdaptor:
 		return code_editor.get_caret_line()
 
 	func curr_column() -> int:
-		return code_editor.get_caret_column()
+		var col = code_editor.get_caret_column()
+		if vim.current.visual_mode:
+			col -= 1
+		return col
 
 	func set_curr_column(col: int) -> void:
 		code_editor.set_caret_column(col)
@@ -1286,6 +1301,9 @@ class EditorAdaptor:
 		else:
 			code_editor.add_theme_constant_override("caret_width", 1)
 			code_editor.caret_type = TextEdit.CARET_TYPE_LINE
+	
+	func set_caret_blink(blink: bool) -> void:
+		code_editor.caret_blink = blink;
 
 	func deselect() -> void:
 		code_editor.deselect()
@@ -1300,7 +1318,7 @@ class EditorAdaptor:
 		if to_line > last_line(): # If we try to select pass the last line, select till the last char
 			to_line = last_line()
 			to_col = INF_COL
-
+		
 		code_editor.select(from_line, from_col, to_line, to_col)
 
 	func delete_selection() -> void:
@@ -1564,17 +1582,22 @@ class CommandDispatcher:
 				return true
 
 			if vim_session.visual_mode:  # Visual mode
-				start = vim_session.visual_start_pos
+				start = vim_session.visual_start_pos.left()
 				if new_pos is TextRange:
 					start = new_pos.from # In some cases (text object), we need to override the start position
 					new_pos = new_pos.to
-				ed.jump_to(new_pos.line, new_pos.column)
-				if start.compares_to(new_pos) > 0: # swap
-					start = new_pos
-					new_pos = vim_session.visual_start_pos
 				if vim_session.visual_line:
-					ed.select(start.line, 0, new_pos.line + 1, 0)
-				else:
+					var start_line = start.line
+					var new_line = new_pos.line
+					var new_col = 0
+
+					if new_line == ed.last_line():
+						new_col = ed.last_column(new_pos.line) + 1
+					elif start.line >= new_pos.line:
+						start_line += 1
+
+					ed.select(start_line, 0, new_line, new_col)
+				else: # visual mode
 					ed.select_by_pos2(start, new_pos.right())
 			elif input_state.operator.is_empty():  # Normal mode motion only
 				ed.jump_to(new_pos.line, new_pos.column)
@@ -1660,4 +1683,3 @@ class CommandDispatcher:
 			print("  Motion: %s %s to %s" % [motion, motion_args, result])
 
 		return result
-
