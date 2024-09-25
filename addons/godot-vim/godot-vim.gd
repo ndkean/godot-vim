@@ -2,7 +2,7 @@
 extends EditorPlugin
 
 const INF_COL : int = 99999
-const DEBUGGING : int = 1 # Change to 1 for debugging
+const DEBUGGING : int = 0 # Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
 
 const BREAKERS : Dictionary = { '!': 1, '"': 1, '#': 1, '$': 1, '%': 1, '&': 1, '(': 1, ')': 1, '*': 1, '+': 1, ',': 1, '-': 1, '.': 1, '/': 1, ':': 1, ';': 1, '<': 1, '=': 1, '>': 1, '?': 1, '@': 1, '[': 1, '\\': 1, ']': 1, '^': 1, '`': 1, '\'': 1, '{': 1, '|': 1, '}': 1, '~': 1 }
@@ -1052,11 +1052,12 @@ class VimSession:
 		visual_line = line_wise
 
 
-		visual_start_pos = ed.curr_position().right()
+		visual_start_pos = ed.curr_position()
 		if line_wise:
 			ed.select(visual_start_pos.line + 1, 0, visual_start_pos.line, 0)
 		else:
-			ed.select_by_pos2(visual_start_pos.left(), visual_start_pos)
+			var second_caret_id = ed.code_editor.add_caret(visual_start_pos.line, visual_start_pos.column+1)
+			ed.select_by_pos2_with_caret(visual_start_pos, visual_start_pos, second_caret_id)
 
 
 class Macro:
@@ -1313,6 +1314,10 @@ class EditorAdaptor:
 
 	func select_by_pos2(from: Position, to: Position) -> void:
 		select(from.line, from.column, to.line, to.column)
+
+	func select_by_pos2_with_caret(from: Position, to: Position, second_caret_id: int) -> void:
+		code_editor.select(from.line, from.column, to.line, to.column, 0)
+		code_editor.select(to.line, to.column+1, to.line, to.column, second_caret_id)
 
 	func select(from_line: int, from_col: int, to_line: int, to_col: int) -> void:
 		if to_line > last_line(): # If we try to select pass the last line, select till the last char
@@ -1582,7 +1587,7 @@ class CommandDispatcher:
 				return true
 
 			if vim_session.visual_mode:  # Visual mode
-				start = vim_session.visual_start_pos.left()
+				start = vim_session.visual_start_pos
 				if new_pos is TextRange:
 					start = new_pos.from # In some cases (text object), we need to override the start position
 					new_pos = new_pos.to
@@ -1598,7 +1603,7 @@ class CommandDispatcher:
 
 					ed.select(start_line, 0, new_line, new_col)
 				else: # visual mode
-					ed.select_by_pos2(start, new_pos.right())
+					ed.select_by_pos2_with_caret(start, new_pos.right(), 1)
 			elif input_state.operator.is_empty():  # Normal mode motion only
 				ed.jump_to(new_pos.line, new_pos.column)
 			else:  # Normal mode operator motion
@@ -1683,4 +1688,3 @@ class CommandDispatcher:
 			print("  Motion: %s %s to %s" % [motion, motion_args, result])
 
 		return result
-
